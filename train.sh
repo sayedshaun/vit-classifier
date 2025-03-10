@@ -11,11 +11,12 @@ norm_epsilon=1e-5
 dropout=0.1
 batch_size=32
 epochs=10
-learning_rate=1e-3
-weight_decay=1e-4
+learning_rate=1e-4
+weight_decay=0
 gradient_accumulation_steps=1
 gradient_clipping=0.0
-precision=32
+precision="fp16"
+device="cuda"
 log_and_eval_step=10
 save_steps=10
 num_workers=0
@@ -45,6 +46,7 @@ python pipeline.py \
     --gradient_accumulation_steps $gradient_accumulation_steps \
     --gradient_clipping $gradient_clipping \
     --precision $precision \
+    --device $device \
     --log_and_eval_step $log_and_eval_step \
     --save_steps $save_steps \
     --num_workers $num_workers \
