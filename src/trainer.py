@@ -112,41 +112,44 @@ class Trainer:
 
     def train(self):
         global_step = 0
+        with tqdm(total=self.epochs * len(self.train_data)) as pbar:
+            for epoch in range(self.epochs):
+                self.model.train()
+                self.optimizer.zero_grad()
 
-        for epoch in range(self.epochs):
-            self.model.train()
-            self.optimizer.zero_grad()
+                for batch in self.train_data:
+                    pbar.set_description("Training")
+                    with autocast(device_type=self.device, dtype=self.precision, enabled=self.is_cuda):
+                        outputs = Trainer.step(self.model, batch, self.device)
+                        loss = outputs.loss
+                        train_loss = loss / self.gradient_accumulation_steps
 
-            for step, batch in enumerate(tqdm(self.train_data, total=len(self.train_data), desc="Training")):
-                with autocast(device_type=self.device, dtype=self.precision, enabled=self.is_cuda):
-                    outputs = Trainer.step(self.model, batch, self.device)
-                    loss = outputs.loss
-                    train_loss = loss / self.gradient_accumulation_steps
+                    self.scaler.scale(train_loss).backward()
 
-                self.scaler.scale(train_loss).backward()
+                    # Gradient accumulation step
+                    if (global_step + 1) % self.gradient_accumulation_steps == 0:
+                        if self.gradient_clipping is not None:
+                            torch.nn.utils.clip_grad_norm_(self.model.parameters(), self.gradient_clipping)
+                        self.scaler.step(self.optimizer)
+                        self.scaler.update()
+                        self.optimizer.zero_grad()
 
-                # Gradient accumulation step
-                if (step + 1) % self.gradient_accumulation_steps == 0:
-                    if self.gradient_clipping is not None:
-                        torch.nn.utils.clip_grad_norm_(self.model.parameters(), self.gradient_clipping)
-                    self.scaler.step(self.optimizer)
-                    self.scaler.update()
-                    self.optimizer.zero_grad()
+                    global_step += 1
 
-                global_step += 1
+                    # Logging
+                    if self.log_and_eval_step and global_step % self.log_and_eval_step == 0:
+                        pbar.set_description("Evaluating")
+                        logs = {"train_loss": train_loss.item() * self.gradient_accumulation_steps}
+                        if self.val_data is not None:
+                            val_loss, val_f1 = self.evaluate(self.model, self.val_data, self.device)
+                            logs.update({"val_loss": val_loss, "val_f1": val_f1})
+                            self.model.train()
 
-                # Logging
-                if self.log_and_eval_step and global_step % self.log_and_eval_step == 0:
-                    logs = {"train_loss": train_loss.item() * self.gradient_accumulation_steps}
-                    if self.val_data is not None:
-                        val_loss, val_f1 = self.evaluate(self.model, self.val_data, self.device)
-                        logs.update({"val_loss": val_loss, "val_f1": val_f1})
-                        self.model.train()
-
-                    if self.report_to_wandb:
-                        wandb.log(logs, step=global_step)
-                    
-                    print(logs)
+                        if self.report_to_wandb:
+                            wandb.log(logs, step=global_step)
+                        
+                        pbar.set_postfix(logs)
+                    pbar.update(1)
 
     @staticmethod
     def evaluate(model: nn.Module, dataloader: DataLoader, device) -> Tuple[float, float]:
@@ -156,7 +159,7 @@ class Trainer:
         total_loss = 0.0
 
         with torch.no_grad():
-            for batch in tqdm(dataloader, desc="Evaluating"):
+            for batch in dataloader:
                 outputs = Trainer.step(model, batch, device)
                 total_loss += outputs.loss.item()
                 all_y_true.append(batch["labels"].detach().cpu())
