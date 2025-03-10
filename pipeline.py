@@ -46,6 +46,7 @@ def main(args: argparse.Namespace) -> None:
         val_data=dataset["val"],
         test_data=dataset["test"],
         batch_size=args.batch_size,
+        device=args.device,
         epochs=args.epochs,
         learning_rate=args.learning_rate,
         weight_decay=args.weight_decay,
@@ -94,6 +95,7 @@ parser.add_argument("--weight_decay", type=float, default=0, help="Weight decay.
 parser.add_argument("--gradient_accumulation_steps", type=int, default=1, help="Gradient accumulation steps.")
 parser.add_argument("--gradient_clipping", type=float, default=1.0, help="Gradient clipping.")
 parser.add_argument("--precision", type=str, default="fp16", help="Precision.")
+parser.add_argument("--device", type=str, default="cpu", help="Device.")
 parser.add_argument("--log_and_eval_step", type=int, default=10, help="Logging steps.")
 parser.add_argument("--save_steps", type=int, default=10, help="Save steps.")
 parser.add_argument("--num_workers", type=int, default=1, help="Number of workers.")
