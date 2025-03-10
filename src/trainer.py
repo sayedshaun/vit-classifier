@@ -139,7 +139,7 @@ class Trainer:
                 if self.log_and_eval_step and global_step % self.log_and_eval_step == 0:
                     logs = {"train_loss": train_loss.item() * self.gradient_accumulation_steps}
                     if self.val_data is not None:
-                        val_loss, val_f1 = self.evaluate(self.model, self.val_data)
+                        val_loss, val_f1 = self.evaluate(self.model, self.val_data, self.device)
                         logs.update({"val_loss": val_loss, "val_f1": val_f1})
                         self.model.train()
 
@@ -149,7 +149,7 @@ class Trainer:
                     print(logs)
 
     @staticmethod
-    def evaluate(model: nn.Module, dataloader: DataLoader) -> Tuple[float, float]:
+    def evaluate(model: nn.Module, dataloader: DataLoader, device) -> Tuple[float, float]:
         model.eval()
         all_y_true = []
         all_y_pred = []
@@ -157,7 +157,7 @@ class Trainer:
 
         with torch.no_grad():
             for batch in tqdm(dataloader, desc="Evaluating"):
-                outputs = Trainer.step(batch)
+                outputs = Trainer.step(model, batch, device)
                 total_loss += outputs.loss.item()
                 all_y_true.append(batch["labels"].detach().cpu())
                 all_y_pred.append(outputs.logits.argmax(dim=-1).detach().cpu())
