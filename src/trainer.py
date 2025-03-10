@@ -119,7 +119,7 @@ class Trainer:
 
             for step, batch in enumerate(tqdm(self.train_data, total=len(self.train_data), desc="Training")):
                 with autocast(device_type=self.device, dtype=self.precision, enabled=self.is_cuda):
-                    outputs = self.step(batch)
+                    outputs = Trainer.step(self.model, batch, self.device)
                     loss = outputs.loss
                     train_loss = loss / self.gradient_accumulation_steps
 
@@ -139,7 +139,7 @@ class Trainer:
                 if self.log_and_eval_step and global_step % self.log_and_eval_step == 0:
                     logs = {"train_loss": train_loss.item() * self.gradient_accumulation_steps}
                     if self.val_data is not None:
-                        val_loss, val_f1 = self.evaluate(self.val_data)
+                        val_loss, val_f1 = self.evaluate(self.model, self.val_data)
                         logs.update({"val_loss": val_loss, "val_f1": val_f1})
                         self.model.train()
 
@@ -148,15 +148,16 @@ class Trainer:
                     
                     print(logs)
 
-    def evaluate(self, dataloader: DataLoader) -> Tuple[float, float]:
-        self.model.eval()
+    @staticmethod
+    def evaluate(model: nn.Module, dataloader: DataLoader) -> Tuple[float, float]:
+        model.eval()
         all_y_true = []
         all_y_pred = []
         total_loss = 0.0
 
         with torch.no_grad():
             for batch in tqdm(dataloader, desc="Evaluating"):
-                outputs = self.step(batch)
+                outputs = Trainer.step(batch)
                 total_loss += outputs.loss.item()
                 all_y_true.append(batch["labels"].detach().cpu())
                 all_y_pred.append(outputs.logits.argmax(dim=-1).detach().cpu())
@@ -169,10 +170,11 @@ class Trainer:
         f1 = f1_score(y_true.numpy(), y_pred.numpy(), average="macro")
         return avg_loss, f1
 
-    def step(self, batch):
-        inputs = batch["inputs"].to(self.device)
-        labels = batch["labels"].to(self.device)
-        outputs = self.model(inputs, labels)
+    @staticmethod
+    def step(model: nn.Module, batch: dict, device):
+        inputs = batch["inputs"].to(device)
+        labels = batch["labels"].to(device)
+        outputs = model(inputs, labels)
         return outputs
 
 
