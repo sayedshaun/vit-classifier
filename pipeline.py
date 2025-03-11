@@ -65,6 +65,8 @@ def main(args: argparse.Namespace) -> None:
     )
     trainer.train()
 
+    if args.do_predict:
+        trainer.predict(val_dataset)
 
 def custom_transforms() -> List[transforms.Compose]:
     return [
@@ -106,6 +108,7 @@ parser.add_argument("--report_to_wandb", action="store_true", help="Report to wa
 parser.add_argument("--wandb_project", type=str, default=None, help="Wandb project name.")
 parser.add_argument("--wandb_runname", type=str, default=None, help="Wandb run name.")
 parser.add_argument("--split_data", action="store_true", help="Split data from training set for validation.")
+parser.add_argument("--do_predict", action="store_true", help="Do prediction after training.")
 args = parser.parse_args()
 
 if __name__ == "__main__":
