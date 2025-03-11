@@ -1,7 +1,9 @@
 import json
+import os
 import statistics
 from typing import Tuple, Union
 import warnings
+import numpy as np
 import torch
 import math
 import torch.nn as nn
@@ -11,7 +13,6 @@ from torch.optim.lr_scheduler import LinearLR
 from torch.amp import autocast, GradScaler
 from tqdm import tqdm
 import wandb
-#from src.metrics import accuracy_score, f1_score, precision_score, recall_score
 from sklearn.metrics import classification_report, f1_score
 
 class Trainer:
@@ -83,7 +84,6 @@ class Trainer:
 
         self.train_data = self._create_dataloader(self.train_data)
         self.val_data = self._create_dataloader(self.val_data)
-        self.test_data = self._create_dataloader(self.test_data)
 
 
     def _create_dataloader(self, dataset: Union[Dataset, DataLoader, None]) -> Union[DataLoader, None]:
@@ -112,6 +112,7 @@ class Trainer:
 
     def train(self):
         global_step = 0
+        best_f1 = float("-inf")
         with tqdm(total=self.epochs * len(self.train_data)) as pbar:
             for epoch in range(self.epochs):
                 self.model.train()
@@ -143,13 +144,31 @@ class Trainer:
                         if self.val_data is not None:
                             val_loss, val_f1 = self.evaluate(self.model, self.val_data, self.device)
                             logs.update({"val_loss": val_loss, "val_f1": val_f1})
+                            if val_f1 > best_f1:
+                                best_f1 = val_f1
+                                if self.save_steps is not None and global_step % self.save_steps == 0:
+                                    pbar.set_description("Saving Checkpoint")
+                                    Trainer.save_checkpoint(self.model, self.optimizer)
                             self.model.train()
+                        else:
+                            logs.update({"val_loss": float("nan"), "val_f1": float("nan")})
+                            if self.save_steps is not None and global_step % self.save_steps == 0:
+                                pbar.set_description("Saving Checkpoint")
+                                Trainer.save_checkpoint(self.model, self.optimizer)
 
                         if self.report_to_wandb:
                             wandb.log(logs, step=global_step)
                         
+                        logs.update({"ckpt_at": f'f1:{best_f1:.3f}'})
                         pbar.set_postfix(logs)
                     pbar.update(1)
+
+
+    @staticmethod
+    def save_checkpoint(model: nn.Module, optimizer: Optimizer) -> None:
+        os.makedirs("checkpoints", exist_ok=True)
+        torch.save(model.state_dict(), "checkpoints/pytorch_model.pt")
+        torch.save(optimizer.state_dict(), "checkpoints/optimizer.pt")
 
     @staticmethod
     def evaluate(model: nn.Module, dataloader: DataLoader, device) -> Tuple[float, float]:
@@ -170,8 +189,8 @@ class Trainer:
         y_pred = torch.cat(all_y_pred)
         avg_loss = total_loss / len(dataloader)
         # Convert tensors to numpy arrays for f1_score
-        f1 = f1_score(y_true.numpy(), y_pred.numpy(), average="macro")
-        return avg_loss, f1
+        f1 = f1_score(y_true.tolist(), y_pred.tolist(), average="macro")
+        return avg_loss, float(format(f1, ".3f"))
 
     @staticmethod
     def step(model: nn.Module, batch: dict, device):
@@ -182,18 +201,25 @@ class Trainer:
 
 
     def predict(self, dataset: Dataset) :
+        dataloader = self._create_dataloader(dataset)
         self.model.eval()
-        y_true, y_pred = [], []
+        all_y_true, all_y_pred = [], []
         with torch.no_grad():
-            for batch in dataset:
-                inputs, label = batch
+            for batch in dataloader:
+                inputs, label = batch["inputs"], batch["labels"]
                 inputs = inputs.to(self.device)
                 label = label.to(self.device)
                 outputs = self.model(inputs, label)
                 y_pred = torch.argmax(outputs.logits, dim=1)
-                y_pred.extend(y_pred.cpu().numpy())
+                all_y_pred.extend(y_pred.cpu().numpy())
+                all_y_true.extend(label.cpu().numpy())
 
-        report = classification_report(y_true, y_pred, output_dict=True)
+        report = classification_report(
+            y_true=all_y_true, 
+            y_pred=all_y_pred, 
+            output_dict=True,
+            zero_division=0
+            )
         if self.report_to_wandb:
             wandb.log(
                 {   "test_accuracy": report["accuracy"], 
