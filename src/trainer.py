@@ -84,6 +84,9 @@ class Trainer:
         self.train_data = self._create_dataloader(self.train_data)
         self.val_data = self._create_dataloader(self.val_data)
 
+        if self.report_to_wandb:
+            wandb.init(project=self.wandb_project, name=self.save_directory)
+
     def _create_dataloader(self, dataset: Union[Dataset, DataLoader, None]) -> Union[DataLoader, None]:
         if dataset is None:
             return None
@@ -124,6 +127,7 @@ class Trainer:
         with open(os.path.join(save_path, "config.json"), "w") as f:
             json.dump(config_dict, f, indent=4)
 
+        return config_dict
 
     @property
     def is_cuda(self) -> bool:
@@ -136,7 +140,10 @@ class Trainer:
 
     def train(self):
         os.makedirs(self.save_directory, exist_ok=True)
-        self._save_training_config(self.save_directory)
+        config_dict = self._save_training_config(self.save_directory)
+        if self.report_to_wandb:
+            wandb.config.update(config_dict)
+
         global_step = 0
         best_f1 = float("-inf")
         with tqdm(total=self.epochs * len(self.train_data)) as pbar:
@@ -188,6 +195,9 @@ class Trainer:
                         logs.update({"ckpt_at": f'f1:{best_f1:.3f}'})
                         pbar.set_postfix(logs)
                     pbar.update(1)
+
+        if self.report_to_wandb:
+            wandb.finish()
 
 
     @staticmethod
