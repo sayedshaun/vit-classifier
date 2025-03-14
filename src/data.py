@@ -64,6 +64,7 @@ class ImageClassificationDataset(torch.utils.data.Dataset):
         
         classes = sorted(os.listdir(root_dir))
         self.class_to_label = {cls: idx for idx, cls in enumerate(classes)}
+        self.label_to_class = {v: k for k, v in self.class_to_label.items()}
 
         self.images, self.labels = [], []
         for cls_name, cls_idx in self.class_to_label.items():
