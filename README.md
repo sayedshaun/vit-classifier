@@ -18,6 +18,8 @@ vit-image-classifier/
 │       └── config.py
 ├── pipeline.py
 ├── train.sh
+├── predict.py
+├── infer.py
 ├── requirements.txt
 ├── LICENSE
 ├── .gitignore
