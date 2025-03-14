@@ -61,7 +61,7 @@ def main(args: argparse.Namespace) -> None:
         seed=args.seed,
         report_to_wandb=args.report_to_wandb,
         wandb_project=args.wandb_project,
-        wandb_runname=args.wandb_runname
+        save_directory=args.save_directory
     )
     trainer.train()
 
@@ -106,7 +106,7 @@ parser.add_argument("--shuffle_data", action="store_true", help="Shuffle data.")
 parser.add_argument("--seed", type=int, default=None, help="Seed.")
 parser.add_argument("--report_to_wandb", action="store_true", help="Report to wandb.")
 parser.add_argument("--wandb_project", type=str, default=None, help="Wandb project name.")
-parser.add_argument("--wandb_runname", type=str, default=None, help="Wandb run name.")
+parser.add_argument("--save_directory", type=str, default=None, help="Path to save checkpoint and config.")
 parser.add_argument("--split_data", action="store_true", help="Split data from training set for validation.")
 parser.add_argument("--do_predict", action="store_true", help="Do prediction after training.")
 args = parser.parse_args()
