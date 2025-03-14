@@ -39,7 +39,7 @@ class Trainer:
         optimizer: Union[Optimizer, None] = None,
         report_to_wandb: Union[bool, None] = None,
         wandb_project: Union[str, None] = None,
-        wandb_runname: Union[str, None] = None
+        save_directory: Union[str, None] = None
         ) -> None:
         self.model = model
         self.device = device
@@ -62,8 +62,7 @@ class Trainer:
 
         self.report_to_wandb = report_to_wandb
         self.wandb_project = wandb_project
-        self.wandb_runname = wandb_runname
-
+        self.save_directory = save_directory
         self.model.to(self.device)
         self.scaler = GradScaler()
 
@@ -81,10 +80,9 @@ class Trainer:
             if hasattr(torch.cuda, "manual_seed"):
                 torch.cuda.manual_seed(self.seed)
             torch.backends.cudnn.deterministic = True
-
+        self.train_dataset = self.train_data
         self.train_data = self._create_dataloader(self.train_data)
         self.val_data = self._create_dataloader(self.val_data)
-
 
     def _create_dataloader(self, dataset: Union[Dataset, DataLoader, None]) -> Union[DataLoader, None]:
         if dataset is None:
@@ -101,6 +99,32 @@ class Trainer:
                     pin_memory=self.pin_memory
                 )
 
+    def _save_training_config(self, save_path: str) -> None:
+        config_dict = {
+            'learning_rate': self.learning_rate,
+            'weight_decay': self.weight_decay,
+            'epochs': self.epochs,
+            'batch_size': self.batch_size,
+            'gradient_accumulation_steps': self.gradient_accumulation_steps,
+            'gradient_clipping': self.gradient_clipping,
+            'precision': str(self.precision),
+            'log_and_eval_step': self.log_and_eval_step,
+            'save_steps': self.save_steps,
+            'num_workers': self.num_workers,
+            'pin_memory': self.pin_memory,
+            'shuffle_data': self.shuffle_data,
+            'seed': self.seed,
+            'report_to_wandb': self.report_to_wandb,
+            'wandb_project': self.wandb_project,
+            'save_directory': self.save_directory
+        }
+        config_dict.update(self.model.config.__dict__)
+        config_dict["label_to_class"] = self.train_dataset.dataset.label_to_class
+
+        with open(os.path.join(save_path, "config.json"), "w") as f:
+            json.dump(config_dict, f, indent=4)
+
+
     @property
     def is_cuda(self) -> bool:
         # Supports both string and torch.device
@@ -111,6 +135,8 @@ class Trainer:
         return False
 
     def train(self):
+        os.makedirs(self.save_directory, exist_ok=True)
+        self._save_training_config(self.save_directory)
         global_step = 0
         best_f1 = float("-inf")
         with tqdm(total=self.epochs * len(self.train_data)) as pbar:
@@ -148,13 +174,13 @@ class Trainer:
                                 best_f1 = val_f1
                                 if self.save_steps is not None and global_step % self.save_steps == 0:
                                     pbar.set_description("Saving Checkpoint")
-                                    Trainer.save_checkpoint(self.model, self.optimizer)
+                                    Trainer.save_checkpoint(self.model, self.optimizer, self.save_directory)
                             self.model.train()
                         else:
                             logs.update({"val_loss": float("nan"), "val_f1": float("nan")})
                             if self.save_steps is not None and global_step % self.save_steps == 0:
                                 pbar.set_description("Saving Checkpoint")
-                                Trainer.save_checkpoint(self.model, self.optimizer)
+                                Trainer.save_checkpoint(self.model, self.optimizer, self.save_directory)
 
                         if self.report_to_wandb:
                             wandb.log(logs, step=global_step)
@@ -165,10 +191,9 @@ class Trainer:
 
 
     @staticmethod
-    def save_checkpoint(model: nn.Module, optimizer: Optimizer) -> None:
-        os.makedirs("checkpoints", exist_ok=True)
-        torch.save(model.state_dict(), "checkpoints/pytorch_model.pt")
-        torch.save(optimizer.state_dict(), "checkpoints/optimizer.pt")
+    def save_checkpoint(model: nn.Module, optimizer: Optimizer, save_directory: str) -> None:
+        torch.save(model.state_dict(), f"{save_directory}/pytorch_model.pt")
+        torch.save(optimizer.state_dict(), f"{save_directory}/optimizer.pt")
 
     @staticmethod
     def evaluate(model: nn.Module, dataloader: DataLoader, device) -> Tuple[float, float]:
@@ -200,12 +225,12 @@ class Trainer:
         return outputs
 
 
-    def predict(self, dataset: Dataset) :
+    def predict(self, dataset: Dataset) -> dict:
         dataloader = self._create_dataloader(dataset)
         self.model.eval()
         all_y_true, all_y_pred = [], []
         with torch.no_grad():
-            for batch in dataloader:
+            for batch in tqdm(dataloader):
                 inputs, label = batch["inputs"], batch["labels"]
                 inputs = inputs.to(self.device)
                 label = label.to(self.device)
@@ -214,21 +239,38 @@ class Trainer:
                 all_y_pred.extend(y_pred.cpu().numpy())
                 all_y_true.extend(label.cpu().numpy())
 
-        report = classification_report(
+        dict_report = classification_report(
             y_true=all_y_true, 
             y_pred=all_y_pred, 
             output_dict=True,
-            zero_division=0
+            zero_division=0,
+            digits=4,
+            target_names=dataset.label_to_class.values()
             )
         if self.report_to_wandb:
             wandb.log(
-                {   "test_accuracy": report["accuracy"], 
-                    "test_precision": report["macro avg"]["precision"], 
-                    "test_recall": report["macro avg"]["recall"], 
-                    "test_f1": report["macro avg"]["f1-score"]
+                {   "test_accuracy": dict_report["accuracy"], 
+                    "test_precision": dict_report["macro avg"]["precision"], 
+                    "test_recall": dict_report["macro avg"]["recall"], 
+                    "test_f1": dict_report["macro avg"]["f1-score"]
                 }
             )
-        with open("classification_report.json", "w") as f:
-            json.dump(report, f, indent=4)
+        
+        txt_report = classification_report(
+            y_true=all_y_true, 
+            y_pred=all_y_pred, 
+            output_dict=False,
+            zero_division=0,
+            digits=4,
+            target_names=dataset.label_to_class.values()
+            )
+        if self.save_directory is not None:
+            with open(os.path.join(self.save_directory, "test_report.txt"), "w") as f:
+                f.write("=" * 25 + " TEST " + "=" * 25 + "\n")
+                f.write(txt_report)
+        else:
+            with open("test_report.txt", "w") as f:
+                f.write("=" * 25 + " TEST " + "=" * 25 + "\n")
+                f.write(txt_report)
                 
 
