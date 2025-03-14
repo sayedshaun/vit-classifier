@@ -1,13 +1,13 @@
 #!/bin/bash
 
-data_dir=dataset
+data_dir=data
 image_size=224
 patch_size=16
 color_channels=3
 hidden_size=128
 num_heads=4
 num_layers=4
-norm_epsilon=1e-5
+norm_epsilon=1e-4
 dropout=0.1
 batch_size=32
 epochs=1
@@ -17,9 +17,9 @@ gradient_accumulation_steps=1
 gradient_clipping=1.0
 precision="fp16"
 device="cpu"
-log_and_eval_step=10
-save_steps=10
-num_workers=0
+log_and_eval_step=100
+save_steps=100
+num_workers=1
 seed=42
 save_directory="my_checkpoint"
 
