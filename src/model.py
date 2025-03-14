@@ -1,10 +1,10 @@
 import math
 import torch
 from torch import nn
-from typing import NamedTuple, Tuple, Union
+from typing import Union
 import torch.nn.functional as F
 from src.config import ModelConfig
-
+from src.utils import ModelOutput
 
 
 class Attention(nn.Module):
@@ -19,7 +19,7 @@ class Attention(nn.Module):
         self.v_proj = nn.Linear(hidden_size, hidden_size, bias=False)
         self.out_proj = nn.Linear(hidden_size,hidden_size, bias=True)
 
-    def forward(self, Q:torch.Tensor, K:torch.Tensor, V:torch.Tensor, mask: Union[torch.Tensor, None]=None)->torch.Tensor:
+    def forward(self, Q:torch.Tensor, K:torch.Tensor, V:torch.Tensor)->torch.Tensor:
         N, L, D = Q.shape
         Q, K, V = self.q_proj(Q), self.k_proj(K), self.v_proj(V)
         Q = Q.view(N, L, self.num_heads, self.head_dim).transpose(1, 2)
@@ -27,11 +27,8 @@ class Attention(nn.Module):
         V = V.view(N, L, self.num_heads, self.head_dim).transpose(1, 2)
         
         score = torch.matmul(Q, K.transpose(-2, -1)) / math.sqrt(self.head_dim)
-        if mask is not None:
-            score = score.masked_fill(mask == 0, float("-inf"))
         weights = F.softmax(score, dim=-1)
         attention = torch.matmul(weights, V)
-
         output = attention.transpose(1, 2).contiguous().view(N, L, D)
         return self.out_proj(output)
 
@@ -61,8 +58,8 @@ class TransformerEncoderBlock(nn.Module):
         self.norm_2 = nn.LayerNorm(hidden_size, norm_epsilon)
         self.mlp = FeedForward(hidden_size, hidden_size * 4, dropout)
 
-    def forward(self, X:torch.Tensor, padding_mask: Union[torch.Tensor, None] = None)->torch.Tensor:
-        attention= self.mha(X, X, X, padding_mask)
+    def forward(self, X:torch.Tensor)->torch.Tensor:
+        attention= self.mha(X, X, X)
         attention = self.norm_1(attention + X)
         output = self.mlp(attention)
         return self.norm_2(output + attention)
@@ -90,10 +87,6 @@ class PatchEmbedding(nn.Module):
         X = self.flatten(X)  # (B, embed_dim, num_patches)
         return X.transpose(1, 2)  # (B, num_patches, embed_dim)
 
-
-class ModelOutput(NamedTuple):
-    logits: Union[torch.Tensor, None] = None
-    loss: Union[torch.Tensor, None] = None
 
 class VITImageClassifier(torch.nn.Module):
     def __init__(self, config: ModelConfig) -> None:
@@ -132,9 +125,10 @@ class VITImageClassifier(torch.nn.Module):
             inputs = block(inputs)
         # Classification
         inputs = self.norm(inputs)
-        logits = self.classifier(inputs[:, 0])
+        cls_token = inputs[:, 0]
+        logits = self.classifier(cls_token)
         if labels is not None:
             loss = F.cross_entropy(logits, labels)
             return ModelOutput(logits=logits, loss=loss)
         else:
-            return ModelOutput(logits=logits)
+            return ModelOutput(logits=logits, loss=None)
