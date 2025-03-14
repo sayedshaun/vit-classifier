@@ -190,7 +190,7 @@ class Trainer:
                                 Trainer.save_checkpoint(self.model, self.optimizer, self.save_directory)
 
                         if self.report_to_wandb:
-                            wandb.log(logs, step=global_step)
+                            wandb.log(logs, step=global_step, sync=True)
                         
                         logs.update({"ckpt_at": f'f1:{best_f1:.3f}'})
                         pbar.set_postfix(logs)
