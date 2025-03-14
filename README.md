@@ -60,6 +60,21 @@ log_and_eval_step=10
 save_steps=10
 num_workers=0
 seed=42
+save_directory="my_checkpoint"
+```
+
+## Test report
+Although auto saved, the test report after completion of training if set `--do_predict` flag. but if you want to test the model explicitly, run the following command:
+
+```bash
+python predict.py --data_dir "my_dataset" --saved_dir "my_checkpoint"
+```
+
+## Inference
+It's import to see actual results, run the following command:
+
+```bash
+python infer.py --image_path "my_image.png" --saved_dir "my_checkpoint"
 ```
 
 ## License
