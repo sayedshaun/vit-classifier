@@ -239,38 +239,38 @@ class Trainer:
                 all_y_pred.extend(y_pred.cpu().numpy())
                 all_y_true.extend(label.cpu().numpy())
 
-        dict_report = classification_report(
-            y_true=all_y_true, 
-            y_pred=all_y_pred, 
-            output_dict=True,
-            zero_division=0,
-            digits=4,
-            target_names=dataset.label_to_class.values()
-            )
-        if self.report_to_wandb:
-            wandb.log(
-                {   "test_accuracy": dict_report["accuracy"], 
-                    "test_precision": dict_report["macro avg"]["precision"], 
-                    "test_recall": dict_report["macro avg"]["recall"], 
-                    "test_f1": dict_report["macro avg"]["f1-score"]
-                }
-            )
-        
-        txt_report = classification_report(
-            y_true=all_y_true, 
-            y_pred=all_y_pred, 
-            output_dict=False,
-            zero_division=0,
-            digits=4,
-            target_names=dataset.label_to_class.values()
-            )
-        if self.save_directory is not None:
-            with open(os.path.join(self.save_directory, "test_report.txt"), "w") as f:
-                f.write("=" * 25 + " TEST " + "=" * 25 + "\n")
-                f.write(txt_report)
-        else:
+        if self.save_directory is None:
+            dict_report = classification_report(
+                y_true=all_y_true, 
+                y_pred=all_y_pred, 
+                output_dict=True,
+                zero_division=0,
+                digits=4,
+                target_names=dataset.label_to_class.values()
+                )
+            if self.report_to_wandb:
+                wandb.log(
+                    {   "test_accuracy": dict_report["accuracy"], 
+                        "test_precision": dict_report["macro avg"]["precision"], 
+                        "test_recall": dict_report["macro avg"]["recall"], 
+                        "test_f1": dict_report["macro avg"]["f1-score"]
+                    }
+                )
             with open("test_report.txt", "w") as f:
-                f.write("=" * 25 + " TEST " + "=" * 25 + "\n")
+                f.write("=" * 27 + " TEST " + "=" * 26 + "\n")
                 f.write(txt_report)
+        else:        
+            txt_report = classification_report(
+                y_true=all_y_true, 
+                y_pred=all_y_pred, 
+                output_dict=False,
+                zero_division=0,
+                digits=4,
+                target_names=self.train_dataset.dataset.label_to_class.values()
+                )
+            with open(os.path.join(self.save_directory, "test_report.txt"), "w") as f:
+                f.write("=" * 27 + " TEST " + "=" * 26 + "\n")
+                f.write(txt_report)
+
                 
 
