@@ -1,4 +1,5 @@
 import os
+from typing import NamedTuple, Union
 
 import torch
 
@@ -67,3 +68,8 @@ def f1_score(y_true: torch.Tensor, y_pred: torch.Tensor, average: str = "macro")
     precision = precision_score(y_true, y_pred, average=average)
     recall = recall_score(y_true, y_pred, average=average)
     return 2 * (precision * recall) / (precision + recall)
+
+
+class ModelOutput(NamedTuple):
+    logits: Union[torch.Tensor, None] = None
+    loss: Union[torch.Tensor, None] = None
