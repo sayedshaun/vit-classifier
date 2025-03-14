@@ -10,17 +10,18 @@ num_layers=4
 norm_epsilon=1e-5
 dropout=0.1
 batch_size=32
-epochs=10
+epochs=1
 learning_rate=1e-4
 weight_decay=0
 gradient_accumulation_steps=1
-gradient_clipping=0.0
+gradient_clipping=1.0
 precision="fp16"
-device="cuda"
+device="cpu"
 log_and_eval_step=10
 save_steps=10
 num_workers=0
 seed=42
+save_directory="my_checkpoint"
 
 
 #Get classes from data directory
@@ -50,8 +51,10 @@ python pipeline.py \
     --log_and_eval_step $log_and_eval_step \
     --save_steps $save_steps \
     --num_workers $num_workers \
+    --save_directory $save_directory \
     --seed $seed \
     --pin_memory \
     --shuffle_data \
     --split_data \
     --normalize \
+    --do_predict
