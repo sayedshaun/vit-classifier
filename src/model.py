@@ -136,6 +136,16 @@ class VITImageClassifier(torch.nn.Module):
         self.norm = nn.LayerNorm(config.hidden_size, config.norm_epsilon)
         self.dropout = nn.Dropout(config.dropout)
         self.classifier = nn.Linear(config.hidden_size, config.num_class)
+        self.apply(self._init_weights)
+
+    def _init_weights(self, m):
+        if isinstance(m, nn.Linear):
+            nn.init.trunc_normal_(m.weight, std=0.02)
+            if m.bias is not None:
+                nn.init.zeros_(m.bias)
+        elif isinstance(m, nn.LayerNorm):
+            nn.init.zeros_(m.bias)
+            nn.init.ones_(m.weight)
 
     def forward(self, inputs: torch.Tensor, labels: Union[torch.Tensor, None] = None) -> ModelOutput:
         B = inputs.shape[0]
