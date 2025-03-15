@@ -136,6 +136,8 @@ class VITImageClassifier(torch.nn.Module):
         self.norm = nn.LayerNorm(config.hidden_size, config.norm_epsilon)
         self.dropout = nn.Dropout(config.dropout)
         self.classifier = nn.Linear(config.hidden_size, config.num_class)
+        nn.init.trunc_normal_(self.cls_token, std=0.02)
+        nn.init.trunc_normal_(self.pos_embed, std=0.02)
         self.apply(self._init_weights)
 
     def _init_weights(self, m):
