@@ -7,30 +7,56 @@ from src.config import ModelConfig
 from src.utils import ModelOutput
 
 
+# class Attention(nn.Module): 
+#     def __init__(self,  hidden_size: int, num_heads: int, dropout: float) -> None:
+#         super(Attention, self).__init__()
+#         self.hidden_size = hidden_size
+#         self.num_heads = num_heads
+#         self.head_dim = hidden_size // num_heads
+#         assert self.head_dim * num_heads == hidden_size, "hidden_size must be divisible by num_heads"
+#         self.q_proj = nn.Linear(hidden_size, hidden_size, bias=False)
+#         self.k_proj = nn.Linear(hidden_size, hidden_size, bias=False)
+#         self.v_proj = nn.Linear(hidden_size, hidden_size, bias=False)
+#         self.out_proj = nn.Linear(hidden_size,hidden_size, bias=True)
+#         self.dropout = nn.Dropout(dropout)
+
+#     def forward(self, inputs: torch.Tensor)->torch.Tensor:
+#         N, L, D = inputs.shape
+#         Q, K, V = self.q_proj(inputs), self.k_proj(inputs), self.v_proj(inputs)
+#         Q = Q.view(N, L, self.num_heads, self.head_dim).transpose(1, 2)
+#         K = K.view(N, L, self.num_heads, self.head_dim).transpose(1, 2)
+#         V = V.view(N, L, self.num_heads, self.head_dim).transpose(1, 2)
+        
+#         score = torch.matmul(Q, K.transpose(-2, -1)) / math.sqrt(self.head_dim)
+#         weights = self.dropout(F.softmax(score, dim=-1))
+#         attention = torch.matmul(weights, V)
+#         output = attention.transpose(1, 2).contiguous().view(N, L, D)
+#         return self.out_proj(output)
+
+
+
 class Attention(nn.Module):
-    def __init__(self,  hidden_size: int, num_heads: int) -> None:
-        super(Attention, self).__init__()
-        self.hidden_size = hidden_size
+    """Multi-head self-attention mechanism."""
+    def __init__(self, hidden_size: int, num_heads: int, dropout: float) -> None:
+        super().__init__()
         self.num_heads = num_heads
         self.head_dim = hidden_size // num_heads
-        assert self.head_dim * num_heads == hidden_size, "hidden_size must be divisible by num_heads"
-        self.q_proj = nn.Linear(hidden_size, hidden_size, bias=False)
-        self.k_proj = nn.Linear(hidden_size, hidden_size, bias=False)
-        self.v_proj = nn.Linear(hidden_size, hidden_size, bias=False)
-        self.out_proj = nn.Linear(hidden_size,hidden_size, bias=True)
+        assert self.head_dim * num_heads == hidden_size, "Embed dim must be divisible by num heads"
+        self.scale = self.head_dim ** -0.5
+        self.qkv = nn.Linear(hidden_size, hidden_size * 3, bias=False)
+        self.proj = nn.Linear(hidden_size, hidden_size, bias=True)
+        self.dropout = nn.Dropout(dropout)
 
-    def forward(self, Q:torch.Tensor, K:torch.Tensor, V:torch.Tensor)->torch.Tensor:
-        N, L, D = Q.shape
-        Q, K, V = self.q_proj(Q), self.k_proj(K), self.v_proj(V)
-        Q = Q.view(N, L, self.num_heads, self.head_dim).transpose(1, 2)
-        K = K.view(N, L, self.num_heads, self.head_dim).transpose(1, 2)
-        V = V.view(N, L, self.num_heads, self.head_dim).transpose(1, 2)
-        
-        score = torch.matmul(Q, K.transpose(-2, -1)) / math.sqrt(self.head_dim)
-        weights = F.softmax(score, dim=-1)
-        attention = torch.matmul(weights, V)
-        output = attention.transpose(1, 2).contiguous().view(N, L, D)
-        return self.out_proj(output)
+    def forward(self, inputs):
+        B, N, D = inputs.shape
+        qkv = self.qkv(inputs).reshape(B, N, 3, self.num_heads, self.head_dim).permute(2, 0, 3, 1, 4)
+        q, k, v = qkv[0], qkv[1], qkv[2]
+
+        score = (q @ k.transpose(-2, -1)) * self.scale
+        weights = self.dropout(F.softmax(score, dim=-1))
+        attention = (weights @ v).transpose(1, 2).reshape(B, N, D)
+        projection = self.dropout(self.proj(attention))
+        return projection
 
 
 class FeedForward(torch.nn.Module):
@@ -41,26 +67,26 @@ class FeedForward(torch.nn.Module):
         self.fc2 = nn.Linear(intermediate_size, hidden_size)
         self.dropout = nn.Dropout(dropout)
     
-    def forward(self, X: torch.Tensor) -> torch.Tensor:
-        X = self.fc1(X)
-        X = self.dropout(X)
-        X = self.act(X)
-        X = self.dropout(X)
-        X = self.fc2(X)
-        return X
+    def forward(self, inputs: torch.Tensor) -> torch.Tensor:
+        inputs = self.fc1(inputs)
+        inputs = self.dropout(inputs)
+        inputs = self.act(inputs)
+        inputs = self.dropout(inputs)
+        inputs = self.fc2(inputs)
+        return inputs
 
 
 class TransformerEncoderBlock(nn.Module):
     def __init__(self, hidden_size: int, num_heads: int, norm_epsilon: float, dropout: float) -> None:
         super(TransformerEncoderBlock, self).__init__()
-        self.mha = Attention(hidden_size, num_heads)
+        self.mha = Attention(hidden_size, num_heads, dropout)
         self.norm_1 = nn.LayerNorm(hidden_size, norm_epsilon)
         self.norm_2 = nn.LayerNorm(hidden_size, norm_epsilon)
         self.mlp = FeedForward(hidden_size, hidden_size * 4, dropout)
 
-    def forward(self, X:torch.Tensor)->torch.Tensor:
-        attention= self.mha(X, X, X)
-        attention = self.norm_1(attention + X)
+    def forward(self, inputs:torch.Tensor)->torch.Tensor:
+        attention= self.mha(inputs)
+        attention = self.norm_1(attention + inputs)
         output = self.mlp(attention)
         return self.norm_2(output + attention)
 
@@ -81,11 +107,11 @@ class PatchEmbedding(nn.Module):
         )
         self.flatten = nn.Flatten(2, 3)
 
-    def forward(self, X: torch.Tensor) -> torch.Tensor:
-        B, C, H, W = X.shape
-        X = self.proj(X)  # (B, embed_dim, H/patch_size, W/patch_size)
-        X = self.flatten(X)  # (B, embed_dim, num_patches)
-        return X.transpose(1, 2)  # (B, num_patches, embed_dim)
+    def forward(self, inputs: torch.Tensor) -> torch.Tensor:
+        B, C, H, W = inputs.shape
+        inputs = self.proj(inputs)  # (B, embed_dim, H/patch_size, W/patch_size)
+        inputs = self.flatten(inputs)  # (B, embed_dim, num_patches)
+        return inputs.transpose(1, 2)  # (B, num_patches, embed_dim)
 
 
 class VITImageClassifier(torch.nn.Module):
