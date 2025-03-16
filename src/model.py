@@ -1,44 +1,44 @@
 import math
 import torch
-from torch import nn
+from torch import Tensor, nn
 from typing import Union
 import torch.nn.functional as F
 from src.config import ModelConfig
 from src.utils import ModelOutput
 
 
-# class Attention(nn.Module): 
-#     def __init__(self,  hidden_size: int, num_heads: int, dropout: float) -> None:
-#         super(Attention, self).__init__()
-#         self.hidden_size = hidden_size
-#         self.num_heads = num_heads
-#         self.head_dim = hidden_size // num_heads
-#         assert self.head_dim * num_heads == hidden_size, "hidden_size must be divisible by num_heads"
-#         self.q_proj = nn.Linear(hidden_size, hidden_size, bias=False)
-#         self.k_proj = nn.Linear(hidden_size, hidden_size, bias=False)
-#         self.v_proj = nn.Linear(hidden_size, hidden_size, bias=False)
-#         self.out_proj = nn.Linear(hidden_size,hidden_size, bias=True)
-#         self.dropout = nn.Dropout(dropout)
+class EncoderAttention(nn.Module): 
+    def __init__(self,  hidden_size: int, num_heads: int, dropout: float) -> None:
+        super(EncoderAttention, self).__init__()
+        self.hidden_size = hidden_size
+        self.num_heads = num_heads
+        self.head_dim = hidden_size // num_heads
+        assert self.head_dim * num_heads == hidden_size, "hidden_size must be divisible by num_heads"
+        self.q_proj = nn.Linear(hidden_size, hidden_size, bias=False)
+        self.k_proj = nn.Linear(hidden_size, hidden_size, bias=False)
+        self.v_proj = nn.Linear(hidden_size, hidden_size, bias=False)
+        self.out_proj = nn.Linear(hidden_size,hidden_size, bias=True)
+        self.dropout = nn.Dropout(dropout)
 
-#     def forward(self, inputs: torch.Tensor)->torch.Tensor:
-#         N, L, D = inputs.shape
-#         Q, K, V = self.q_proj(inputs), self.k_proj(inputs), self.v_proj(inputs)
-#         Q = Q.view(N, L, self.num_heads, self.head_dim).transpose(1, 2)
-#         K = K.view(N, L, self.num_heads, self.head_dim).transpose(1, 2)
-#         V = V.view(N, L, self.num_heads, self.head_dim).transpose(1, 2)
+    def forward(self, inputs: torch.Tensor)->torch.Tensor:
+        N, L, D = inputs.shape
+        Q, K, V = self.q_proj(inputs), self.k_proj(inputs), self.v_proj(inputs)
+        Q = Q.view(N, L, self.num_heads, self.head_dim).transpose(1, 2)
+        K = K.view(N, L, self.num_heads, self.head_dim).transpose(1, 2)
+        V = V.view(N, L, self.num_heads, self.head_dim).transpose(1, 2)
         
-#         score = torch.matmul(Q, K.transpose(-2, -1)) / math.sqrt(self.head_dim)
-#         weights = self.dropout(F.softmax(score, dim=-1))
-#         attention = torch.matmul(weights, V)
-#         output = attention.transpose(1, 2).contiguous().view(N, L, D)
-#         return self.out_proj(output)
+        score = torch.matmul(Q, K.transpose(-2, -1)) / math.sqrt(self.head_dim)
+        weights = self.dropout(F.softmax(score, dim=-1))
+        attention = torch.matmul(weights, V)
+        output = attention.transpose(1, 2).contiguous().view(N, L, D)
+        return self.out_proj(output)
 
 
 
-class Attention(nn.Module):
+class VITAttention(nn.Module):
     """Multi-head self-attention mechanism."""
     def __init__(self, hidden_size: int, num_heads: int, dropout: float) -> None:
-        super().__init__()
+        super(VITAttention, self).__init__()
         self.num_heads = num_heads
         self.head_dim = hidden_size // num_heads
         assert self.head_dim * num_heads == hidden_size, "Embed dim must be divisible by num heads"
@@ -56,7 +56,7 @@ class Attention(nn.Module):
         weights = self.dropout(F.softmax(score, dim=-1))
         attention = (weights @ v).transpose(1, 2).reshape(B, N, D)
         projection = self.dropout(self.proj(attention))
-        return projection
+        return projection    
 
 
 class FeedForward(torch.nn.Module):
