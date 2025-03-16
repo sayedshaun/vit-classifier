@@ -83,7 +83,7 @@ class TransformerEncoderBlock(nn.Module):
         self.mlp = FeedForward(hidden_size, hidden_size * 4, dropout)
 
     def forward(self, inputs:torch.Tensor)->torch.Tensor:
-        attention, _ = self.mha(inputs)
+        attention, _ = self.mha(inputs, inputs, inputs)
         attention = self.norm_1(attention + inputs)
         output = self.mlp(attention)
         return self.norm_2(output + attention)
