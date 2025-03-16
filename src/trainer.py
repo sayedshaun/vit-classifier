@@ -258,14 +258,7 @@ class Trainer:
                 digits=4,
                 target_names=dataset.label_to_class.values()
                 )
-            if self.report_to_wandb:
-                wandb.log(
-                    {   "test_accuracy": dict_report["accuracy"], 
-                        "test_precision": dict_report["macro avg"]["precision"], 
-                        "test_recall": dict_report["macro avg"]["recall"], 
-                        "test_f1": dict_report["macro avg"]["f1-score"]
-                    }
-                )
+
             with open("test_report.txt", "w") as f:
                 f.write("=" * 27 + " TEST " + "=" * 26 + "\n")
                 f.write(txt_report)
@@ -278,6 +271,16 @@ class Trainer:
                 digits=4,
                 target_names=self.train_dataset.dataset.label_to_class.values()
                 )
+
+            if self.report_to_wandb:
+                wandb.log(
+                    {   "test_accuracy": dict_report["accuracy"], 
+                        "test_precision": dict_report["macro avg"]["precision"], 
+                        "test_recall": dict_report["macro avg"]["recall"], 
+                        "test_f1": dict_report["macro avg"]["f1-score"]
+                    }
+                )
+
             with open(os.path.join(self.save_directory, "test_report.txt"), "w") as f:
                 f.write("=" * 27 + " TEST " + "=" * 26 + "\n")
                 f.write(txt_report)
