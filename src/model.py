@@ -62,30 +62,28 @@ class Attention(nn.Module):
 class FeedForward(torch.nn.Module):
     def __init__(self, hidden_size: int, intermediate_size: int, dropout: float) -> None:
         super(FeedForward, self).__init__()
-        self.fc1 = nn.Linear(hidden_size, intermediate_size)
-        self.act = nn.ReLU()
-        self.fc2 = nn.Linear(intermediate_size, hidden_size)
-        self.dropout = nn.Dropout(dropout)
-    
-    def forward(self, inputs: torch.Tensor) -> torch.Tensor:
-        inputs = self.fc1(inputs)
-        inputs = self.dropout(inputs)
-        inputs = self.act(inputs)
-        inputs = self.dropout(inputs)
-        inputs = self.fc2(inputs)
-        return inputs
+        self.net = torch.nn.Sequential(
+            torch.nn.Linear(hidden_size, intermediate_size),
+            torch.nn.ReLU(),
+            torch.nn.Dropout(dropout),
+            torch.nn.Linear(intermediate_size, hidden_size),
+            torch.nn.Dropout(dropout)
+        )
 
+    def forward(self, inputs: torch.Tensor) -> torch.Tensor:
+        return self.net(inputs)
+    
 
 class TransformerEncoderBlock(nn.Module):
     def __init__(self, hidden_size: int, num_heads: int, norm_epsilon: float, dropout: float) -> None:
         super(TransformerEncoderBlock, self).__init__()
-        self.mha = Attention(hidden_size, num_heads, dropout)
+        self.mha = nn.MultiheadAttention(hidden_size, num_heads, dropout, batch_first=True)
         self.norm_1 = nn.LayerNorm(hidden_size, norm_epsilon)
         self.norm_2 = nn.LayerNorm(hidden_size, norm_epsilon)
         self.mlp = FeedForward(hidden_size, hidden_size * 4, dropout)
 
     def forward(self, inputs:torch.Tensor)->torch.Tensor:
-        attention= self.mha(inputs)
+        attention, _ = self.mha(inputs)
         attention = self.norm_1(attention + inputs)
         output = self.mlp(attention)
         return self.norm_2(output + attention)
