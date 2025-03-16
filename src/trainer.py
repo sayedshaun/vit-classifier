@@ -237,7 +237,13 @@ class Trainer:
 
     def predict(self, dataset: Dataset) -> dict:
         dataloader = self._create_dataloader(dataset)
+        if self.save_directory is not None:
+            self.model.load_state_dict(
+                torch.load(self.save_directory + "/pytorch_model.pt", map_location=self.device, weights_only=True), 
+                strict=True
+            )            
         self.model.eval()
+
         all_y_true, all_y_pred = [], []
         with torch.no_grad():
             for batch in tqdm(dataloader):
