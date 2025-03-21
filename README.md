@@ -29,6 +29,18 @@ vit-image-classifier/
 ## Setup
 To set up the environment, run the following command:
 
+For stable release
+```bash
+git clone https://github.com/sayedshaun/vit-classifier.git
+cd vit-classifier
+```
+
+For development release
+```bash
+git clone -b dev https://github.com/sayedshaun/vit-classifier.git
+cd vit-classifier
+```
+
 ```bash
 pip install -r requirements.txt
 ```
